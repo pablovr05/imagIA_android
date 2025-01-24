@@ -18,6 +18,16 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.churumbeai.imagia.databinding.FragmentHomeBinding
+import com.churumbeai.imagia.network.ServerConfig
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -66,41 +76,70 @@ class HomeFragment : Fragment(), TextToSpeech.OnInitListener {
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
 
-        val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US)
-            .format(System.currentTimeMillis())
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Image")
-            }
-        }
-
-        val outputOptions = ImageCapture.OutputFileOptions
-            .Builder(
-                requireContext().contentResolver,
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues
-            )
-            .build()
-
         imageCapture.takePicture(
-            outputOptions,
             ContextCompat.getMainExecutor(requireContext()),
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onError(exc: ImageCaptureException) {
-                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(image: ImageProxy) {
+                    super.onCaptureSuccess(image)
+
+                    val buffer = image.planes[0].buffer
+                    val bytes = ByteArray(buffer.remaining())
+                    buffer.get(bytes)
+
+                    image.close()
+
+                    // Enviar la imagen al servidor
+                    sendPhotoToServer(bytes)
                 }
 
-                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    val msg = "Photo capture succeeded: ${output.savedUri}"
-                    Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
-
-                    Log.d(TAG, msg)
-                    simulateServerResponse()
+                override fun onError(exception: ImageCaptureException) {
+                    super.onError(exception)
+                    Log.e(TAG, "Error al capturar la foto: ${exception.message}", exception)
+                    Toast.makeText(requireContext(), "Error al capturar la foto", Toast.LENGTH_SHORT).show()
                 }
             }
         )
+    }
+
+    private fun sendPhotoToServer(photoData: ByteArray) {
+        // URL del servidor (usa tu configuración del ServerConfig)
+        val url = ServerConfig.getBaseUrl() + "/upload" // Ajusta el endpoint según sea necesario
+
+        // Crear cliente y solicitud usando OkHttp
+        val client = OkHttpClient()
+        val requestBody = photoData.toRequestBody("image/jpeg".toMediaTypeOrNull())
+
+        val request = Request.Builder()
+            .url(url)
+            .post(requestBody)
+            .addHeader("Content-Type", "image/jpeg")
+            .build()
+
+        // Ejecutar la solicitud en un hilo secundario
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    Log.i(TAG, "Foto enviada con éxito: ${response.body?.string()}")
+
+                    // Mostrar mensaje en la UI en el hilo principal
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), "Foto enviada con éxito", Toast.LENGTH_SHORT).show()
+                        speakText("Imagen enviada al servidor con éxito")
+                    }
+                } else {
+                    Log.e(TAG, "Error al enviar la foto: ${response.code}")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), "Error al enviar la foto", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: IOException) {
+                Log.e(TAG, "Error de red al enviar la foto: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(requireContext(), "Error de red al enviar la foto", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     private fun simulateServerResponse() {
