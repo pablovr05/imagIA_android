@@ -1,19 +1,23 @@
 package com.churumbeai.imagia.ui.home
 
+import android.Manifest
+import android.content.ContentValues
 import android.content.Context
+import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -36,6 +40,8 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.abs
 
+typealias LumaListener = (luma: Double) -> Unit
+
 class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListener {
 
     private var _binding: FragmentHomeBinding? = null
@@ -43,18 +49,16 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
     private var imageCapture: ImageCapture? = null
     private lateinit var cameraExecutor: ExecutorService
-
     private lateinit var textToSpeech: TextToSpeech
 
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
 
-    // Variables para detectar el double thud
     private var lastThudTime: Long = 0
     private var thudCount = 0
-    private val THUD_MIN_THRESHOLD = 1 // Umbral mínimo de aceleración para un thud
-    private val THUD_MAX_THRESHOLD = 3 // Umbral máximo de aceleración para un thud
-    private val DOUBLE_THUD_INTERVAL = 500 // Intervalo máximo entre thuds en milisegundos
+    private val THUD_MIN_THRESHOLD = 1
+    private val THUD_MAX_THRESHOLD = 3
+    private val DOUBLE_THUD_INTERVAL = 500
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -69,12 +73,11 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
         textToSpeech = TextToSpeech(requireContext(), this)
 
-        // Inicializar el sensor
         sensorManager = requireContext().getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
 
         if (accelerometer == null) {
-            Log.e("Sensor", "El sensor de aceleración lineal no está disponible en este dispositivo")
+            Log.e("Sensor", "El sensor de aceleración lineal no está disponible")
         } else {
             sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL)
         }
@@ -84,6 +87,8 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
         } else {
             requestPermissions(REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
         }
+
+        binding.imageCaptureButton.setOnClickListener { takePhoto() }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
@@ -96,54 +101,33 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
             val y = event.values[1]
             val z = event.values[2]
 
-            // Calculamos la aceleración total
             val acceleration = abs(x) + abs(y) + abs(z)
 
-            // Verificamos si la aceleración está dentro del rango válido para un thud
-            if (acceleration >= THUD_MIN_THRESHOLD && acceleration <=THUD_MAX_THRESHOLD) {
+            if (acceleration >= THUD_MIN_THRESHOLD && acceleration <= THUD_MAX_THRESHOLD) {
                 val currentTime = System.currentTimeMillis()
 
                 if (currentTime - lastThudTime < DOUBLE_THUD_INTERVAL) {
                     thudCount++
                 } else {
-                    thudCount = 1 // Reiniciar contador si pasa mucho tiempo entre thuds
+                    thudCount = 1
                 }
 
                 lastThudTime = currentTime
 
                 if (thudCount == 2) {
-                    Log.d("DoubleThud", "Se ha detectado un double thud")
+                    Log.d("DoubleThud", "Se detectó un double thud")
                     takePhoto()
-                    simulateServerResponse() // Simular respuesta de servidor con TTS
-                    thudCount = 0 // Reiniciar después del double thud
+                    simulateServerResponse()
+                    thudCount = 0
                 }
             }
         }
     }
 
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        // No necesitamos implementar este método para este caso
-    }
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
-
-
-        val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US)
-            .format(System.currentTimeMillis())
-        val contentValues = android.content.ContentValues().apply {
-            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-        }
-
-        val outputOptions = ImageCapture.OutputFileOptions
-            .Builder(
-                requireContext().contentResolver,
-                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues
-            )
-            .build()
-
 
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(requireContext()),
@@ -155,20 +139,12 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
                     val bytes = ByteArray(buffer.remaining())
                     buffer.get(bytes)
 
-
-                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    val msg = "Foto guardada: ${output.savedUri}"
-                    Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
-                    Log.d(TAG, msg)
-
                     image.close()
 
-                    // Enviar la imagen al servidor
                     sendPhotoToServer(bytes)
                 }
 
                 override fun onError(exception: ImageCaptureException) {
-                    super.onError(exception)
                     Log.e(TAG, "Error al capturar la foto: ${exception.message}", exception)
                     Toast.makeText(requireContext(), "Error al capturar la foto", Toast.LENGTH_SHORT).show()
                 }
@@ -177,10 +153,8 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
     }
 
     private fun sendPhotoToServer(photoData: ByteArray) {
-        // URL del servidor (usa tu configuración del ServerConfig)
-        val url = ServerConfig.getBaseUrl() + "/upload" // Ajusta el endpoint según sea necesario
+        val url = ServerConfig.getBaseUrl() + "/upload"
 
-        // Crear cliente y solicitud usando OkHttp
         val client = OkHttpClient()
         val requestBody = photoData.toRequestBody("image/jpeg".toMediaTypeOrNull())
 
@@ -190,16 +164,13 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
             .addHeader("Content-Type", "image/jpeg")
             .build()
 
-        // Ejecutar la solicitud en un hilo secundario
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val response = client.newCall(request).execute()
                 if (response.isSuccessful) {
-                    Log.i(TAG, "Foto enviada con éxito: ${response.body?.string()}")
-
-                    // Mostrar mensaje en la UI en el hilo principal
+                    Log.i(TAG, "Foto enviada: ${response.body?.string()}")
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(requireContext(), "Foto enviada con éxito", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "Foto enviada exitosamente", Toast.LENGTH_SHORT).show()
                         speakText("Imagen enviada al servidor con éxito")
                     }
                 } else {
@@ -209,7 +180,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
                     }
                 }
             } catch (e: IOException) {
-                Log.e(TAG, "Error de red al enviar la foto: ${e.message}", e)
+                Log.e(TAG, "Error de red: ${e.message}", e)
                 withContext(Dispatchers.Main) {
                     Toast.makeText(requireContext(), "Error de red al enviar la foto", Toast.LENGTH_SHORT).show()
                 }
@@ -218,7 +189,8 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
     }
 
     private fun simulateServerResponse() {
-        val serverResponse = "Imagen recibida correctamente."
+        Toast.makeText(requireContext(), "Procesando imagen...", Toast.LENGTH_SHORT).show()
+        val serverResponse = "Imagen procesada exitosamente"
         speakText(serverResponse)
     }
 
@@ -232,16 +204,15 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
         cameraProviderFuture.addListener({
             val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
 
-            val preview = androidx.camera.core.Preview.Builder()
+            val preview = Preview.Builder()
                 .build()
                 .also {
                     it.setSurfaceProvider(binding.viewFinder.surfaceProvider)
                 }
 
-            imageCapture = ImageCapture.Builder()
-                .build()
+            imageCapture = ImageCapture.Builder().build()
 
-            val cameraSelector = androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA
+            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
             try {
                 cameraProvider.unbindAll()
@@ -249,16 +220,15 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
                     this, cameraSelector, preview, imageCapture
                 )
             } catch (exc: Exception) {
-                Log.e(TAG, "Use case binding failed", exc)
+                Log.e(TAG, "Error al iniciar la cámara", exc)
             }
-
         }, ContextCompat.getMainExecutor(requireContext()))
     }
 
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(
             requireContext(), it
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     override fun onDestroyView() {
@@ -285,11 +255,15 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
     companion object {
         private const val TAG = "CameraXApp"
-        private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
         private const val REQUEST_CODE_PERMISSIONS = 10
         private val REQUIRED_PERMISSIONS =
             mutableListOf(
-                android.Manifest.permission.CAMERA
-            ).toTypedArray()
+                Manifest.permission.CAMERA,
+                Manifest.permission.RECORD_AUDIO
+            ).apply {
+                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+                    add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                }
+            }.toTypedArray()
     }
 }
