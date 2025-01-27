@@ -88,8 +88,6 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
             requestPermissions(REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
         }
 
-        binding.imageCaptureButton.setOnClickListener { takePhoto() }
-
         cameraExecutor = Executors.newSingleThreadExecutor()
 
         return root
@@ -97,13 +95,10 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type == Sensor.TYPE_LINEAR_ACCELERATION) {
-            val x = event.values[0]
             val y = event.values[1]
-            val z = event.values[2]
+            val accelerationY = abs(y)
 
-            val acceleration = abs(x) + abs(y) + abs(z)
-
-            if (acceleration >= THUD_MIN_THRESHOLD && acceleration <= THUD_MAX_THRESHOLD) {
+            if (accelerationY >= THUD_MIN_THRESHOLD && accelerationY <= THUD_MAX_THRESHOLD) {
                 val currentTime = System.currentTimeMillis()
 
                 if (currentTime - lastThudTime < DOUBLE_THUD_INTERVAL) {
@@ -115,7 +110,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
                 lastThudTime = currentTime
 
                 if (thudCount == 2) {
-                    Log.d("DoubleThud", "Se detectó un double thud")
+                    Log.d("DoubleThud", "Se detectó un double thud en el eje Y")
                     takePhoto()
                     simulateServerResponse()
                     thudCount = 0
@@ -153,36 +148,54 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
     }
 
     private fun sendPhotoToServer(photoData: ByteArray) {
-        val url = ServerConfig.getBaseUrl() + "/upload"
+        val url = ServerConfig.getBaseUrl() + "/api/analyze_image"
+
+        // Convertir la imagen a Base64
+        val imageBase64 = android.util.Base64.encodeToString(photoData, android.util.Base64.DEFAULT)
+
+        // Crear el cuerpo del JSON
+        val requestBodyJson = """
+        {
+            "userId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "prompt": "string",
+            "image": "$imageBase64",
+            "model": "llama3.2-vision:latest"
+        }
+    """.trimIndent()
 
         val client = OkHttpClient()
-        val requestBody = photoData.toRequestBody("image/jpeg".toMediaTypeOrNull())
+        val requestBody = requestBodyJson.toRequestBody("application/json".toMediaTypeOrNull())
 
         val request = Request.Builder()
             .url(url)
             .post(requestBody)
-            .addHeader("Content-Type", "image/jpeg")
+            .addHeader("Content-Type", "application/json")
             .build()
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val response = client.newCall(request).execute()
                 if (response.isSuccessful) {
-                    Log.i(TAG, "Foto enviada: ${response.body?.string()}")
+                    val responseBody = response.body?.string()
+                    Log.i(TAG, "Respuesta del servidor: $responseBody")
+
+                    // Leer la respuesta del servidor
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(requireContext(), "Foto enviada exitosamente", Toast.LENGTH_SHORT).show()
-                        speakText("Imagen enviada al servidor con éxito")
+                        Toast.makeText(requireContext(), "Imagen procesada exitosamente", Toast.LENGTH_SHORT).show()
+                        responseBody?.let {
+                            speakText(it) // Utiliza TTS para leer la respuesta
+                        }
                     }
                 } else {
-                    Log.e(TAG, "Error al enviar la foto: ${response.code}")
+                    Log.e(TAG, "Error al analizar la imagen: ${response.code}")
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(requireContext(), "Error al enviar la foto", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "Error al analizar la imagen", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: IOException) {
                 Log.e(TAG, "Error de red: ${e.message}", e)
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(requireContext(), "Error de red al enviar la foto", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "Error de red al enviar la imagen", Toast.LENGTH_SHORT).show()
                 }
             }
         }

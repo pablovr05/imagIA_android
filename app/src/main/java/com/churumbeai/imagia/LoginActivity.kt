@@ -15,30 +15,20 @@ class LoginActivity : AppCompatActivity() {
         setContentView(R.layout.login_layout)
 
         // Referencias a los campos del formulario
-        val ipEditText = findViewById<EditText>(R.id.ipEditText)
-        val portEditText = findViewById<EditText>(R.id.portEditText)
-        val connectButton = findViewById<Button>(R.id.connectButton)
+        val usernameEditText = findViewById<EditText>(R.id.usernameEditText)
+        val loginButton = findViewById<Button>(R.id.loginButton)
 
-        // Acción del botón "Conectar"
-        connectButton.setOnClickListener {
-            val ip = ipEditText.text.toString().trim()
-            val port = portEditText.text.toString().trim()
+        // Acción del botón "Iniciar Sesión"
+        loginButton.setOnClickListener {
+            val username = usernameEditText.text.toString().trim()
 
             // Validación básica
-            if (ip.isEmpty() || port.isEmpty()) {
-                Toast.makeText(this, "Por favor, introduce IP y puerto", Toast.LENGTH_SHORT).show()
+            if (username.isEmpty()) {
+                Toast.makeText(this, "Por favor, introduce tu nombre de usuario", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            if (!isValidPort(port)) {
-                Toast.makeText(this, "El puerto debe ser un número entre 1 y 65535", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            // Configurar IP y Puerto en ServerConfig
-            ServerConfig.setServerConfig(ip, port)
-
-            // Probar la conexión
+            // Probar la conexión al servidor
             ServerConfig.testConnection { isConnected ->
                 if (isConnected) {
                     Toast.makeText(this, "Conexión exitosa", Toast.LENGTH_SHORT).show()
@@ -46,8 +36,7 @@ class LoginActivity : AppCompatActivity() {
 
                     // Ir a MainActivity
                     val intent = Intent(this, MainActivity::class.java).apply {
-                        putExtra("SERVER_IP", ip)
-                        putExtra("SERVER_PORT", port)
+                        putExtra("USERNAME", username) // Enviar el nombre de usuario a MainActivity
                     }
                     startActivity(intent)
                 } else {
@@ -55,17 +44,6 @@ class LoginActivity : AppCompatActivity() {
                     Log.e("LoginActivity", "Error al conectar")
                 }
             }
-        }
-
-    }
-
-    // Verifica que el puerto esté en el rango válido (1-65535)
-    private fun isValidPort(port: String): Boolean {
-        return try {
-            val portNumber = port.toInt()
-            portNumber in 1..65535
-        } catch (e: NumberFormatException) {
-            false
         }
     }
 }

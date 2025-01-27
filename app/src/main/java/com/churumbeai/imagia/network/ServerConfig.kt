@@ -26,7 +26,7 @@ object ServerConfig {
      * Obtiene la URL base en formato completo.
      */
     fun getBaseUrl(): String {
-        return "https://$serverIp:$serverPort"
+        return "https://$serverIp"
     }
 
     /**
@@ -35,7 +35,7 @@ object ServerConfig {
     fun testConnection(onResult: (Boolean) -> Unit) {
         val client = OkHttpClient()
         val request = Request.Builder()
-            .url(getBaseUrl()) // Usa la URL base configurada
+            .url(getBaseUrl()+"/api/models")
             .build()
 
         CoroutineScope(Dispatchers.IO).launch {

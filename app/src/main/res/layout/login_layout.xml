@@ -10,7 +10,7 @@
         android:id="@+id/title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Conexión al Servidor"
+        android:text="Inicio de Sesión"
         android:textSize="24sp"
         android:textStyle="bold"
         android:gravity="center"
@@ -19,34 +19,22 @@
         app:layout_constraintEnd_toEndOf="parent" />
 
     <EditText
-        android:id="@+id/ipEditText"
+        android:id="@+id/usernameEditText"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:hint="IP del servidor"
+        android:hint="Nombre de usuario"
         android:inputType="text"
         app:layout_constraintTop_toBottomOf="@id/title"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="24dp" />
 
-    <EditText
-        android:id="@+id/portEditText"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:hint="Puerto del servidor"
-        android:inputType="number"
-        app:layout_constraintTop_toBottomOf="@id/ipEditText"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="16dp" />
-
-    <!-- Botón para conectar -->
     <Button
-        android:id="@+id/connectButton"
+        android:id="@+id/loginButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Conectar"
-        app:layout_constraintTop_toBottomOf="@id/portEditText"
+        android:text="Iniciar Sesión"
+        app:layout_constraintTop_toBottomOf="@id/usernameEditText"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="24dp" />

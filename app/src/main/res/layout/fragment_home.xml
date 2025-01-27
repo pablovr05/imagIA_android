@@ -17,15 +17,6 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.0" />
 
-    <Button
-        android:id="@+id/image_capture_button"
-        android:layout_width="110dp"
-        android:layout_height="110dp"
-        android:layout_marginLeft="148dp"
-        android:layout_marginBottom="100dp"
-        android:elevation="2dp"
-        android:text="Captura"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintLeft_toLeftOf="parent" />
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>
