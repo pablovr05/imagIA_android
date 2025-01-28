@@ -14,21 +14,17 @@ class LoginActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.login_layout)
 
-        // Referencias a los campos del formulario
         val usernameEditText = findViewById<EditText>(R.id.usernameEditText)
         val loginButton = findViewById<Button>(R.id.loginButton)
 
-        // Acción del botón "Iniciar Sesión"
         loginButton.setOnClickListener {
             val username = usernameEditText.text.toString().trim()
 
-            // Validación básica
             if (username.isEmpty()) {
                 Toast.makeText(this, "Por favor, introduce tu nombre de usuario", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            // Probar la conexión al servidor
             ServerConfig.testConnection { isConnected ->
                 if (isConnected) {
                     Toast.makeText(this, "Conexión exitosa", Toast.LENGTH_SHORT).show()
@@ -36,7 +32,7 @@ class LoginActivity : AppCompatActivity() {
 
                     // Ir a MainActivity
                     val intent = Intent(this, MainActivity::class.java).apply {
-                        putExtra("USERNAME", username) // Enviar el nombre de usuario a MainActivity
+                        putExtra("USERNAME", username)
                     }
                     startActivity(intent)
                 } else {

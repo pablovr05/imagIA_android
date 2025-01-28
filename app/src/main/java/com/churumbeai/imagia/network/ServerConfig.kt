@@ -44,14 +44,12 @@ object ServerConfig {
                 val isSuccess = response.isSuccessful
                 Log.i("ServerConfig", "Conexión exitosa a ${getBaseUrl()}. Respuesta: ${response.body?.string()}")
 
-                // Volver al hilo principal para notificar el resultado
                 withContext(Dispatchers.Main) {
                     onResult(isSuccess)
                 }
             } catch (e: IOException) {
                 Log.e("ServerConfig", "Error al intentar conectar: ${e.message}", e)
 
-                // Volver al hilo principal para notificar el fallo
                 withContext(Dispatchers.Main) {
                     onResult(false)
                 }

@@ -139,6 +139,8 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
         isProcessing = true
 
+        speakText("Processant imatge")
+
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(requireContext()),
             object : ImageCapture.OnImageCapturedCallback() {
@@ -156,6 +158,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
                 override fun onError(exception: ImageCaptureException) {
                     Log.e(TAG, "Error al capturar la foto: ${exception.message}", exception)
+                    speakText("Hi ha hagut un error. Si us play torna a fer la foto.")
                     Toast.makeText(requireContext(), "Error al capturar la foto", Toast.LENGTH_SHORT).show()
                     isProcessing = false
                 }
@@ -169,7 +172,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/CameraXApp")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/imagia")
         }
 
         val resolver = requireContext().contentResolver
@@ -210,7 +213,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
         val requestBodyJson = """
         {
             "userId": "1",
-            "prompt": "Describeme lo que hay en la imagen",
+            "prompt": "Descriu el que hi ha a la imatge",
             "images": "$imageBase64",
             "model": "llama3.2-vision:latest"
         }
@@ -341,7 +344,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
     }
 
     companion object {
-        private const val TAG = "CameraXApp"
+        private const val TAG = "imagia"
         private const val REQUEST_CODE_PERMISSIONS = 10
         private val REQUIRED_PERMISSIONS =
             mutableListOf(
