@@ -60,6 +60,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
+    private var isProcessing = false
 
     private var lastThudTime: Long = 0
     private var thudCount = 0
@@ -116,20 +117,27 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
                 lastThudTime = currentTime
 
-                if (thudCount == 2) {
+                if (thudCount == 2 && !isProcessing) {
                     Log.d("DoubleThud", "Se detectó un double thud en el eje Y")
                     takePhoto()
-                    simulateServerResponse()
                     thudCount = 0
                 }
             }
         }
     }
 
+
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
+
+        if (isProcessing) {
+            Log.d(TAG, "Procesamiento en curso. No se tomará otra foto.")
+            return
+        }
+
+        isProcessing = true
 
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(requireContext()),
@@ -137,42 +145,57 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
                 override fun onCaptureSuccess(image: ImageProxy) {
                     super.onCaptureSuccess(image)
 
-                    // Convertir ImageProxy a Bitmap
                     val bitmap = imageProxyToBitmap(image)
-                    image.close() // Cerrar ImageProxy después de convertirlo
+                    image.close()
 
-                    // Enviar el Bitmap al servidor
+                    //DESCOMENTAR PARA VER QUE SE ENVIA AL SERVER
+                    //saveBitmapLocally(bitmap)
+
                     sendPhotoToServer(bitmap)
                 }
 
                 override fun onError(exception: ImageCaptureException) {
                     Log.e(TAG, "Error al capturar la foto: ${exception.message}", exception)
                     Toast.makeText(requireContext(), "Error al capturar la foto", Toast.LENGTH_SHORT).show()
+                    isProcessing = false
                 }
             }
         )
     }
 
+    //DEBUG
+    private fun saveBitmapLocally(bitmap: Bitmap) {
+        val filename = "captured_image_${System.currentTimeMillis()}.jpg"
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/CameraXApp")
+        }
+
+        val resolver = requireContext().contentResolver
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+        uri?.let {
+            resolver.openOutputStream(it).use { outputStream ->
+                if (outputStream != null) {
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)
+                }
+                Toast.makeText(requireContext(), "Foto guardada en: $it", Toast.LENGTH_SHORT).show()
+                Log.d(TAG, "Foto guardada en: $it")
+            }
+        }
+    }
+
+
     private fun imageProxyToBitmap(image: ImageProxy): Bitmap {
-        val plane = image.planes[0]
-        val buffer = plane.buffer
-        val bytes = ByteArray(buffer.remaining())
-        buffer.get(bytes)
-
-        // Crear un Bitmap desde los bytes
-        val yuvImage = YuvImage(
-            bytes,
-            ImageFormat.NV21,
-            image.width,
-            image.height,
-            null
-        )
-
-        val out = ByteArrayOutputStream()
-        yuvImage.compressToJpeg(Rect(0, 0, image.width, image.height), 80, out)
-        val jpegBytes = out.toByteArray()
-
-        return BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
+        if (image.format == ImageFormat.JPEG) {
+            val buffer = image.planes[0].buffer
+            val bytes = ByteArray(buffer.remaining())
+            buffer.get(bytes)
+            return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        } else {
+            throw IllegalArgumentException("Formato de imagen no soportado: ${image.format}")
+        }
     }
 
     private fun sendPhotoToServer(bitmap: Bitmap) {
@@ -184,7 +207,6 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
         val imageBase64 = android.util.Base64.encodeToString(photoData, android.util.Base64.NO_WRAP)
 
-        // Crear el cuerpo del JSON
         val requestBodyJson = """
         {
             "userId": "1",
@@ -192,9 +214,9 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
             "images": "$imageBase64",
             "model": "llama3.2-vision:latest"
         }
-    """.trimIndent()
+        """.trimIndent()
 
-        Log.d("JSON_SEND", requestBodyJson.take(500) + "... [truncated]")
+        //Log.d("JSON_SEND", requestBodyJson.take(500) + "... [truncated]")
 
         val client = OkHttpClient.Builder()
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
@@ -247,6 +269,8 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
                 withContext(Dispatchers.Main) {
                     Toast.makeText(requireContext(), "Error de red al enviar la imagen", Toast.LENGTH_SHORT).show()
                 }
+            } finally {
+                isProcessing = false
             }
         }
     }
