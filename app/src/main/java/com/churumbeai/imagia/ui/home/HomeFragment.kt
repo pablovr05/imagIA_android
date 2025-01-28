@@ -4,6 +4,11 @@ import android.Manifest
 import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.Rect
+import android.graphics.YuvImage
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -32,6 +37,8 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
@@ -130,13 +137,12 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
                 override fun onCaptureSuccess(image: ImageProxy) {
                     super.onCaptureSuccess(image)
 
-                    val buffer = image.planes[0].buffer
-                    val bytes = ByteArray(buffer.remaining())
-                    buffer.get(bytes)
+                    // Convertir ImageProxy a Bitmap
+                    val bitmap = imageProxyToBitmap(image)
+                    image.close() // Cerrar ImageProxy después de convertirlo
 
-                    image.close()
-
-                    sendPhotoToServer(bytes)
+                    // Enviar el Bitmap al servidor
+                    sendPhotoToServer(bitmap)
                 }
 
                 override fun onError(exception: ImageCaptureException) {
@@ -147,23 +153,55 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
         )
     }
 
-    private fun sendPhotoToServer(photoData: ByteArray) {
-        val url = ServerConfig.getBaseUrl() + "/api/analyze_image"
+    private fun imageProxyToBitmap(image: ImageProxy): Bitmap {
+        val plane = image.planes[0]
+        val buffer = plane.buffer
+        val bytes = ByteArray(buffer.remaining())
+        buffer.get(bytes)
 
-        // Convertir la imagen a Base64
-        val imageBase64 = android.util.Base64.encodeToString(photoData, android.util.Base64.DEFAULT)
+        // Crear un Bitmap desde los bytes
+        val yuvImage = YuvImage(
+            bytes,
+            ImageFormat.NV21,
+            image.width,
+            image.height,
+            null
+        )
+
+        val out = ByteArrayOutputStream()
+        yuvImage.compressToJpeg(Rect(0, 0, image.width, image.height), 80, out)
+        val jpegBytes = out.toByteArray()
+
+        return BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
+    }
+
+    private fun sendPhotoToServer(bitmap: Bitmap) {
+        val url = ServerConfig.getBaseUrl() + "/api/generate"
+
+        val outputStream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+        val photoData = outputStream.toByteArray()
+
+        val imageBase64 = android.util.Base64.encodeToString(photoData, android.util.Base64.NO_WRAP)
 
         // Crear el cuerpo del JSON
         val requestBodyJson = """
         {
-            "userId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-            "prompt": "string",
-            "image": "$imageBase64",
+            "userId": "1",
+            "prompt": "Describeme lo que hay en la imagen",
+            "images": "$imageBase64",
             "model": "llama3.2-vision:latest"
         }
     """.trimIndent()
 
-        val client = OkHttpClient()
+        Log.d("JSON_SEND", requestBodyJson.take(500) + "... [truncated]")
+
+        val client = OkHttpClient.Builder()
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+
         val requestBody = requestBodyJson.toRequestBody("application/json".toMediaTypeOrNull())
 
         val request = Request.Builder()
@@ -179,13 +217,25 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
                     val responseBody = response.body?.string()
                     Log.i(TAG, "Respuesta del servidor: $responseBody")
 
-                    // Leer la respuesta del servidor
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(requireContext(), "Imagen procesada exitosamente", Toast.LENGTH_SHORT).show()
-                        responseBody?.let {
-                            speakText(it) // Utiliza TTS para leer la respuesta
+                        val responseBodyString = responseBody ?: return@withContext
+
+                        try {
+                            val jsonObject = JSONObject(responseBodyString)
+                            val message = jsonObject.optString("message", "Mensaje no disponible")
+                            val response = jsonObject.optJSONObject("data")?.optString("response", "Respuesta no disponible")
+
+                            Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+
+                            response?.let {
+                                speakText(it)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error al parsear la respuesta JSON: ${e.message}")
+                            Toast.makeText(requireContext(), "Error al procesar la respuesta", Toast.LENGTH_SHORT).show()
                         }
                     }
+
                 } else {
                     Log.e(TAG, "Error al analizar la imagen: ${response.code}")
                     withContext(Dispatchers.Main) {
