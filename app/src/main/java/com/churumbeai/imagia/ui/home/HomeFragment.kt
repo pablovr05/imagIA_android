@@ -139,7 +139,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
         isProcessing = true
 
-        speakText("Processant imatge")
+        speakText("Procesando imagen")
 
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(requireContext()),
@@ -158,7 +158,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
                 override fun onError(exception: ImageCaptureException) {
                     Log.e(TAG, "Error al capturar la foto: ${exception.message}", exception)
-                    speakText("Hi ha hagut un error. Si us play torna a fer la foto.")
+                    speakText("Ha habido un error. Por favor vuelve a intentar la foto.")
                     Toast.makeText(requireContext(), "Error al capturar la foto", Toast.LENGTH_SHORT).show()
                     isProcessing = false
                 }
@@ -213,7 +213,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
         val requestBodyJson = """
         {
             "userId": "1",
-            "prompt": "Descriu el que hi ha a la imatge",
+            "prompt": "Describe lo que hay en la imagen",
             "images": "$imageBase64",
             "model": "llama3.2-vision:latest"
         }
