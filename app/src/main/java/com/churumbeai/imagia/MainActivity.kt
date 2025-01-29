@@ -1,6 +1,7 @@
 package com.churumbeai.imagia
 
 import android.os.Bundle
+import android.widget.Toast
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.findNavController
@@ -18,6 +19,10 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        val username = intent.getStringExtra("USERNAME")
+        Toast.makeText(this, "Bienvenido, $username", Toast.LENGTH_SHORT).show()
+
 
         val navView: BottomNavigationView = binding.navView
 
