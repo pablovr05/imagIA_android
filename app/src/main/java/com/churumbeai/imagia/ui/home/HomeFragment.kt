@@ -98,8 +98,11 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
+
+
         return root
     }
+
 
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type == Sensor.TYPE_LINEAR_ACCELERATION) {
@@ -202,7 +205,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
     }
 
     private fun sendPhotoToServer(bitmap: Bitmap) {
-        val url = ServerConfig.getBaseUrl() + "/api/generate"
+        val url = ServerConfig.getBaseUrl() + "/api/analitzar-imatge"
 
         val outputStream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
@@ -210,9 +213,14 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
         val imageBase64 = android.util.Base64.encodeToString(photoData, android.util.Base64.NO_WRAP)
 
+        val sharedPreferences = requireContext().getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+        val userId = sharedPreferences.getString("userId", null)
+        val userToken = sharedPreferences.getString("auth_token", null)
+
         val requestBodyJson = """
         {
-            "userId": "1",
+            "userId": "$userId",
+            "token": "$userToken",
             "prompt": "Describe lo que hay en la imagen",
             "images": "$imageBase64",
             "model": "llama3.2-vision:latest"
@@ -222,9 +230,9 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
         //Log.d("JSON_SEND", requestBodyJson.take(500) + "... [truncated]")
 
         val client = OkHttpClient.Builder()
-            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-            .writeTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             .build()
 
         val requestBody = requestBodyJson.toRequestBody("application/json".toMediaTypeOrNull())

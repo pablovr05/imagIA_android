@@ -9,6 +9,7 @@ import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.churumbeai.imagia.network.ServerConfig
+import com.churumbeai.imagia.ui.home.HomeFragment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -31,7 +32,7 @@ class TwoFactorAuthActivity : AppCompatActivity() {
             val code2FA = code2FAEditText.text.toString().trim()
 
             if (code2FA.isEmpty()) {
-                Toast.makeText(this, "Por favor, introduce el código OTP", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Por favor, introduce el código 2FA", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -42,7 +43,8 @@ class TwoFactorAuthActivity : AppCompatActivity() {
     private fun verify2FA(code2F_func: String) {
         // Recoger datos guardados en local user
         val sharedPreferences = getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
-        val phone = sharedPreferences.getString("user_phone", null)
+        val phone = sharedPreferences.getString("phone", null)
+        val userId = sharedPreferences.getString("userId", null)
 
         // Check telefono
         if (phone == null) {
@@ -54,8 +56,9 @@ class TwoFactorAuthActivity : AppCompatActivity() {
         val url = ServerConfig.getBaseUrl() + "/api/usuaris/validar"
 
         val jsonBody = JSONObject().apply {
-            put("telefon", phone)
-            put("codi_validacio", code2F_func)
+            put("userId",userId)
+            put("phone", phone)
+            put("code", code2F_func)
         }
 
         val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaTypeOrNull())
@@ -79,17 +82,23 @@ class TwoFactorAuthActivity : AppCompatActivity() {
                     val status = jsonResponse.getString("status")
 
                     if (status == "OK") {
-                        val apiKey = jsonResponse.getJSONObject("data").getString("api_key")
 
-                        val sharedPreferences = getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
-                        sharedPreferences.edit().putString("api_key", apiKey).apply()
+                        val authToken = response.header("Authorization")
 
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(applicationContext, "Verificación exitosa", Toast.LENGTH_SHORT).show()
+                        if (authToken != null) {
+                            // Guardar el token en SharedPreferences
+                            sharedPreferences.edit().putString("auth_token", authToken).apply()
+                            Log.i("TwoFactorAuthActivity", "Token guardado correctamente: $authToken")
 
-                            startActivity(Intent(applicationContext, MainActivity::class.java))
+                            val intent = Intent(applicationContext, MainActivity::class.java)
+                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            startActivity(intent)
                             finish()
+
+                        } else {
+                            Log.e("TwoFactorAuthActivity", "No se recibió token de autenticación en la respuesta")
                         }
+
                     } else {
                         val message = jsonResponse.getString("message")
                         withContext(Dispatchers.Main) {

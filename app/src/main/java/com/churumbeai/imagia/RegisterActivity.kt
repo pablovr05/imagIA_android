@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.churumbeai.imagia.network.ServerConfig
+import com.churumbeai.imagia.ui.home.HomeFragment
 import kotlinx.coroutines.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -27,7 +28,7 @@ class RegisterActivity : AppCompatActivity() {
 
         // Si ya hay un token guardado, saltar al 2FA
         if (sharedPreferences.contains("auth_token")) {
-            startActivity(Intent(this, TwoFactorAuthActivity::class.java))
+            startActivity(Intent(this, MainActivity::class.java))
             finish()
             return
         }
@@ -121,9 +122,10 @@ class RegisterActivity : AppCompatActivity() {
         val url = ServerConfig.getBaseUrl() + "/api/usuaris/registrar"
 
         val jsonBody = JSONObject().apply {
-            put("phone", phone)  //
+            put("phone", phone)
             put("nickname", nickname)
             put("email", email)
+            put("type_id", "FREE")
             put("password", password)
         }
 
@@ -152,13 +154,18 @@ class RegisterActivity : AppCompatActivity() {
                     if (status == "OK") {
                         // Si la respuesta es exitosa, se obtiene el usuario creado (data)
                         val userData = jsonResponse.getJSONObject("data")
-                        val createdNickname = userData.getString("nickname")
-                        val createdEmail = userData.getString("email")
+                        val createdUserId = userData.getString("userId")
+                        val createdUserPhone= userData.getString("phone")
+                        val createdUserNickname= userData.getString("nickname")
+                        val createdUserPass= password;
 
-                        // TOKEN DE PLACEHOLDER PRUEBAS
-                        val authToken = "PLACEHOLDER_TOKEN"
+
                         val sharedPreferences = getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
-                        sharedPreferences.edit().putString("auth_token", authToken).apply()
+                        sharedPreferences.edit().putString("phone", createdUserPhone).apply()
+                        sharedPreferences.edit().putString("userId", createdUserId).apply()
+                        sharedPreferences.edit().putString("nickname", createdUserNickname).apply()
+                        sharedPreferences.edit().putString("password", createdUserPass).apply()
+
 
                         withContext(Dispatchers.Main) {
                             //VISTA 2FA
