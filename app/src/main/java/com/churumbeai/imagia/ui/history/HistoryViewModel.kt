@@ -1,13 +1,13 @@
-package com.churumbeai.imagia.ui.home
+package com.churumbeai.imagia.ui.history
 
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 
-class HomeViewModel : ViewModel() {
+class HistoryViewModel : ViewModel() {
 
     private val _text = MutableLiveData<String>().apply {
-        value = ""
+        value = "This is dashboard Fragment"
     }
     val text: LiveData<String> = _text
 }

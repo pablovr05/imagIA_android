@@ -1,4 +1,4 @@
-package com.churumbeai.imagia.ui.home
+package com.churumbeai.imagia.ui.camera
 
 import android.Manifest
 import android.content.ContentValues
@@ -7,8 +7,6 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
-import android.graphics.Rect
-import android.graphics.YuvImage
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -27,7 +25,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
-import com.churumbeai.imagia.databinding.FragmentHomeBinding
+import com.churumbeai.imagia.databinding.FragmentCameraBinding
 import com.churumbeai.imagia.network.ServerConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,8 +38,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.IOException
-import java.nio.ByteBuffer
-import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -49,9 +45,9 @@ import kotlin.math.abs
 
 typealias LumaListener = (luma: Double) -> Unit
 
-class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListener {
+class CameraFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListener {
 
-    private var _binding: FragmentHomeBinding? = null
+    private var _binding: FragmentCameraBinding? = null
     private val binding get() = _binding!!
 
     private var imageCapture: ImageCapture? = null
@@ -75,9 +71,9 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
         savedInstanceState: Bundle?
     ): View {
         val homeViewModel =
-            ViewModelProvider(this).get(HomeViewModel::class.java)
+            ViewModelProvider(this).get(CameraViewModel::class.java)
 
-        _binding = FragmentHomeBinding.inflate(inflater, container, false)
+        _binding = FragmentCameraBinding.inflate(inflater, container, false)
         val root: View = binding.root
 
         textToSpeech = TextToSpeech(requireContext(), this)
