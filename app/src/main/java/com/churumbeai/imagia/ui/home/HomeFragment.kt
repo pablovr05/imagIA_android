@@ -61,6 +61,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
     private var isProcessing = false
+    private var isSpeaking = false
 
     private var lastThudTime: Long = 0
     private var thudCount = 0
@@ -135,7 +136,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
 
-        if (isProcessing) {
+        if (isProcessing || isSpeaking) {
             Log.d(TAG, "Procesamiento en curso. No se tomará otra foto.")
             return
         }
@@ -293,7 +294,20 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
     }
 
     private fun speakText(text: String) {
+        isSpeaking = true
         textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+
+        textToSpeech.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+
+            override fun onDone(utteranceId: String?) {
+                isSpeaking = false
+            }
+
+            override fun onError(utteranceId: String?) {
+                isSpeaking = false
+            }
+        })
     }
 
     private fun startCamera() {
