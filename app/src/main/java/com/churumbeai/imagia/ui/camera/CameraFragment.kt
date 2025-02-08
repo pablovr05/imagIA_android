@@ -224,7 +224,7 @@ class CameraFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListe
         }
         """.trimIndent()
 
-        //Log.d("JSON_SEND", requestBodyJson.take(500) + "... [truncated]")
+        // Log.d("JSON_SEND", requestBodyJson.take(500) + "... [truncated]")
 
         val client = OkHttpClient.Builder()
             .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
@@ -259,6 +259,7 @@ class CameraFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListe
 
                             response?.let {
                                 speakText(it)
+                                sendQuotaRequest(userId, userToken)
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "Error al parsear la respuesta JSON: ${e.message}")
@@ -283,10 +284,47 @@ class CameraFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListe
         }
     }
 
-    private fun simulateServerResponse() {
-        Toast.makeText(requireContext(), "Procesando imagen...", Toast.LENGTH_SHORT).show()
-        val serverResponse = "Imagen procesada exitosamente"
-        speakText(serverResponse)
+    private fun sendQuotaRequest(userId: String?, userToken: String?) {
+        val url = ServerConfig.getBaseUrl() + "/api/usuaris/quota"
+
+        val requestBodyJson = """
+    {
+        "userId": "$userId",
+        "token": "$userToken"
+    }
+    """.trimIndent()
+
+        val client = OkHttpClient.Builder()
+            .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+
+        val requestBody = requestBodyJson.toRequestBody("application/json".toMediaTypeOrNull())
+
+        val request = Request.Builder()
+            .url(url)
+            .post(requestBody)
+            .addHeader("Content-Type", "application/json")
+            .build()
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val responseBody = response.body?.string()
+                    Log.i(TAG, "Respuesta del servidor de cuota: $responseBody")
+
+
+                } else {
+                    Log.e(TAG, "Error al obtener cuota: ${response.code}")
+
+                }
+            } catch (e: IOException) {
+                Log.e(TAG, "Error de red al obtener cuota: ${e.message}", e)
+
+            }
+        }
     }
 
     private fun speakText(text: String) {
