@@ -18,7 +18,7 @@
         android:theme="@style/Theme.Imagia"
         tools:targetApi="31">
         <activity
-            android:name=".LoginActivity"
+            android:name=".RegisterActivity"
             android:exported="true"
             android:label="@string/app_name">
             <intent-filter>
@@ -29,6 +29,12 @@
 
         <activity
             android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+        </activity>
+
+        <activity
+            android:name=".TwoFactorAuthActivity"
             android:exported="true"
             android:label="@string/app_name">
         </activity>
