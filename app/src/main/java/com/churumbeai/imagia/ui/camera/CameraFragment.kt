@@ -1,4 +1,4 @@
-package com.churumbeai.imagia.ui.home
+package com.churumbeai.imagia.ui.camera
 
 import android.Manifest
 import android.content.ContentValues
@@ -7,8 +7,6 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
-import android.graphics.Rect
-import android.graphics.YuvImage
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -27,7 +25,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
-import com.churumbeai.imagia.databinding.FragmentHomeBinding
+import com.churumbeai.imagia.databinding.FragmentCameraBinding
 import com.churumbeai.imagia.network.ServerConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,8 +38,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.IOException
-import java.nio.ByteBuffer
-import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -49,9 +45,9 @@ import kotlin.math.abs
 
 typealias LumaListener = (luma: Double) -> Unit
 
-class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListener {
+class CameraFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListener {
 
-    private var _binding: FragmentHomeBinding? = null
+    private var _binding: FragmentCameraBinding? = null
     private val binding get() = _binding!!
 
     private var imageCapture: ImageCapture? = null
@@ -61,6 +57,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
     private var isProcessing = false
+    private var isSpeaking = false
 
     private var lastThudTime: Long = 0
     private var thudCount = 0
@@ -74,9 +71,9 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
         savedInstanceState: Bundle?
     ): View {
         val homeViewModel =
-            ViewModelProvider(this).get(HomeViewModel::class.java)
+            ViewModelProvider(this).get(CameraViewModel::class.java)
 
-        _binding = FragmentHomeBinding.inflate(inflater, container, false)
+        _binding = FragmentCameraBinding.inflate(inflater, container, false)
         val root: View = binding.root
 
         textToSpeech = TextToSpeech(requireContext(), this)
@@ -98,8 +95,11 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
+
+
         return root
     }
+
 
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type == Sensor.TYPE_LINEAR_ACCELERATION) {
@@ -132,14 +132,14 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
 
-        if (isProcessing) {
+        if (isProcessing || isSpeaking) {
             Log.d(TAG, "Procesamiento en curso. No se tomará otra foto.")
             return
         }
 
         isProcessing = true
 
-        speakText("Processant imatge")
+        speakText("Procesando imagen")
 
         imageCapture.takePicture(
             ContextCompat.getMainExecutor(requireContext()),
@@ -158,7 +158,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
                 override fun onError(exception: ImageCaptureException) {
                     Log.e(TAG, "Error al capturar la foto: ${exception.message}", exception)
-                    speakText("Hi ha hagut un error. Si us play torna a fer la foto.")
+                    speakText("Ha habido un error. Por favor vuelve a intentar la foto.")
                     Toast.makeText(requireContext(), "Error al capturar la foto", Toast.LENGTH_SHORT).show()
                     isProcessing = false
                 }
@@ -202,7 +202,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
     }
 
     private fun sendPhotoToServer(bitmap: Bitmap) {
-        val url = ServerConfig.getBaseUrl() + "/api/generate"
+        val url = ServerConfig.getBaseUrl() + "/api/analitzar-imatge"
 
         val outputStream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
@@ -210,21 +210,26 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
         val imageBase64 = android.util.Base64.encodeToString(photoData, android.util.Base64.NO_WRAP)
 
+        val sharedPreferences = requireContext().getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+        val userId = sharedPreferences.getString("userId", null)
+        val userToken = sharedPreferences.getString("auth_token", null)
+
         val requestBodyJson = """
         {
-            "userId": "1",
-            "prompt": "Descriu el que hi ha a la imatge",
+            "userId": "$userId",
+            "token": "$userToken",
+            "prompt": "Describe lo que hay en la imagen",
             "images": "$imageBase64",
             "model": "llama3.2-vision:latest"
         }
         """.trimIndent()
 
-        //Log.d("JSON_SEND", requestBodyJson.take(500) + "... [truncated]")
+        // Log.d("JSON_SEND", requestBodyJson.take(500) + "... [truncated]")
 
         val client = OkHttpClient.Builder()
-            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-            .writeTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             .build()
 
         val requestBody = requestBodyJson.toRequestBody("application/json".toMediaTypeOrNull())
@@ -254,6 +259,7 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
 
                             response?.let {
                                 speakText(it)
+                                sendQuotaRequest(userId, userToken)
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "Error al parsear la respuesta JSON: ${e.message}")
@@ -278,14 +284,64 @@ class HomeFragment : Fragment(), SensorEventListener, TextToSpeech.OnInitListene
         }
     }
 
-    private fun simulateServerResponse() {
-        Toast.makeText(requireContext(), "Procesando imagen...", Toast.LENGTH_SHORT).show()
-        val serverResponse = "Imagen procesada exitosamente"
-        speakText(serverResponse)
+    private fun sendQuotaRequest(userId: String?, userToken: String?) {
+        val url = ServerConfig.getBaseUrl() + "/api/usuaris/quota"
+
+        val requestBodyJson = """
+    {
+        "userId": "$userId",
+        "token": "$userToken"
+    }
+    """.trimIndent()
+
+        val client = OkHttpClient.Builder()
+            .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+
+        val requestBody = requestBodyJson.toRequestBody("application/json".toMediaTypeOrNull())
+
+        val request = Request.Builder()
+            .url(url)
+            .post(requestBody)
+            .addHeader("Content-Type", "application/json")
+            .build()
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val responseBody = response.body?.string()
+                    Log.i(TAG, "Respuesta del servidor de cuota: $responseBody")
+
+
+                } else {
+                    Log.e(TAG, "Error al obtener cuota: ${response.code}")
+
+                }
+            } catch (e: IOException) {
+                Log.e(TAG, "Error de red al obtener cuota: ${e.message}", e)
+
+            }
+        }
     }
 
     private fun speakText(text: String) {
+        isSpeaking = true
         textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+
+        textToSpeech.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+
+            override fun onDone(utteranceId: String?) {
+                isSpeaking = false
+            }
+
+            override fun onError(utteranceId: String?) {
+                isSpeaking = false
+            }
+        })
     }
 
     private fun startCamera() {
